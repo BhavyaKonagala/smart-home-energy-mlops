@@ -1,0 +1,96 @@
+name: Smart Home Energy Docker CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  docker-ci:
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Train Smart Home ML model
+        run: python train_model.py
+
+      - name: Run ML quality gate
+        run: python quality_gate.py
+
+      - name: Run ML tests
+        run: python -m unittest test_ml_pipeline.py -v
+
+      - name: Run Flask API tests
+        run: python -m unittest test_app.py -v
+
+      - name: Build Docker image
+        run: docker build -t smart-home-energy:${{ github.sha }} .
+
+      - name: Start Docker container
+        run: |
+          docker run -d \
+            --name smart-home-energy-container \
+            -p 5000:5000 \
+            smart-home-energy:${{ github.sha }}
+
+      - name: Wait for API
+        run: |
+          for i in {1..10}; do
+            if curl --fail http://localhost:5000/health; then
+              echo "API is healthy"
+              exit 0
+            fi
+            echo "Waiting for API..."
+            sleep 3
+          done
+          echo "API did not become healthy"
+          exit 1
+
+      - name: Test prediction API
+        run: |
+          curl --fail \
+            -X POST \
+            -H "Content-Type: application/json" \
+            -d '{
+              "Household_Size": 4,
+              "Monthly_Income": 50000,
+              "Home_Area_sqft": 1500,
+              "AC_Hours_Daily": 8,
+              "Refrigerator_Hours": 24,
+              "Washing_Machine_Uses": 5,
+              "TV_Hours_Daily": 5,
+              "Computer_Hours_Daily": 4,
+              "Lighting_Hours_Daily": 6,
+              "Smart_Appliances": 3
+            }' \
+            http://localhost:5000/predict
+
+      - name: Show container logs
+        if: always()
+        run: docker logs smart-home-energy-container
+
+      - name: Stop and remove container
+        if: always()
+        run: |
+          docker stop smart-home-energy-container || true
+          docker rm smart-home-energy-container || true
