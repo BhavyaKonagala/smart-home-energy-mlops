@@ -38,3 +38,13 @@ jobs:
 
       - name: Run automated ML tests
         run: python -m unittest discover -v
+        
+      - name: Upload Smart Home ML artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: smart-home-energy-ml-artifacts
+          path: |
+            smart_home_energy_model.pkl
+            metrics.json
+            smart_home_energy_processed.csv
+          retention-days: 7
