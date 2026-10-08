@@ -1,6 +1,6 @@
 def predict_energy_usage(energy_hours, smart_appliances):
     if energy_hours >= 8 and smart_appliances >= 3:
-        return "LOW"
+        return "HIGH"
     else:
         return "LOW"
 
